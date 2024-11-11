@@ -1,62 +1,63 @@
 <?php
-// Start session
+// session start here...
 session_start();
+include_once 'validate.php';
 
-// Check if the form was submitted
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    
-    $input_username = $_POST['user'];
-    $input_password = $_POST['pwd'];
 
-    // Login to the softball database
-    $servername = "localhost";
-    $db_username = "root";
-    $db_password = "";
-    $dbname = "softball";
+$username = test_input($_POST['user']);
+$password = test_input($_POST['pwd']);
+$repeatPassword = test_input($_POST['repeat']);
 
-    // Connect to the database
-    $conn = new mysqli($servername, $db_username, $db_password, $dbname);
-
-    // Check connection
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
-
-    // Select password from users where username = <what the user typed in>
-    $sql = "SELECT password FROM users WHERE username = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $input_username);
-    $stmt->execute();
-    $stmt->store_result();
-
-    // If no rows, then username is not valid (but don't tell Mallory), just send her back to the login
-    if ($stmt->num_rows > 0) {
-        
-        $stmt->bind_result($db_password_hash);
-        $stmt->fetch();
-
-        // password_verify(password from form, password from db)
-        if (password_verify($input_password, $db_password_hash)) {
-            // If good, put username in session
-            $_SESSION['username'] = $input_username;
-            
-            header("location: games.php");
-            exit;
-        } else {
-            // Otherwise send back to login
-            header("location: index.php");
-            exit;
-        }
-    } else {
-       
-        header("location: index.php");
-        exit;
-    }
-
-    // Close statement and connection
-    $stmt->close();
-    $conn->close();
-} else {
-    header("location: index.php");
-    exit;
+//make sure they match!
+if ($password !== $repeatPassword) {
+    echo "Passwords do not match.";
+    exit();
 }
+
+// create the password_hash using the PASSWORD_DEFAULT argument
+$hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+// login to the database
+$servername = "localhost";
+$dbUsername = "root";
+$dbPassword = "";
+$dbName = "softball";
+
+$conn = new mysqli($servername, $dbUsername, $dbPassword, $dbName);
+
+// Check connection
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+// making new user is not already in the database
+$sql = "SELECT id FROM users WHERE username = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$stmt->store_result();
+
+if ($stmt->num_rows > 0) {
+    echo "Username already exists.";
+    exit();
+}
+
+// insert username and password hash into db (put the username in the session
+// or make them login)
+
+$sql = "INSERT INTO users (username, password) VALUES (?, ?)";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("ss", $username, $hashed_password);
+
+if ($stmt->execute()) {
+    $_SESSION['username'] = $username;
+    echo "Registration successful! Welcome, " . htmlspecialchars($username) . "!";
+    header("location: index.php");
+} else {
+    echo "Registration failed. Please try again.";
+}
+
+
+$stmt->close();
+$conn->close();
+?>
+
